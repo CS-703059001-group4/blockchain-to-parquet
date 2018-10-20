@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/piotrnar/gocoin/lib/others/blockdb"
@@ -9,6 +10,8 @@ import (
 	"github.com/xitongsys/parquet-go/ParquetWriter"
 	"github.com/xitongsys/parquet-go/parquet"
 )
+
+const SIZE_PER_FILE = 128000000
 
 type Converter struct {
 	db       *blockdb.BlockDB
@@ -50,27 +53,55 @@ func (c *Converter) Convert(targetTime time.Time, progressChan chan<- float32, o
 	defer close(stopChan)
 
 	// create parquet writer
-	fileWriter, err := ParquetFile.NewLocalFileWriter(outFile)
-	if err != nil {
+	partition := 0
+	var fileWriter ParquetFile.ParquetFile
+	var writer *ParquetWriter.ParquetWriter
+	nextPartition := func() error {
+		if fileWriter != nil {
+			err := writer.WriteStop()
+			fileWriter.Close()
+			if err != nil {
+				return err
+			}
+		}
+		var err error
+		fileWriter, err = ParquetFile.NewLocalFileWriter(fmt.Sprintf(outFile, partition))
+		if err != nil {
+			return err
+		}
+		partition += 1
+		writer, err = ParquetWriter.NewParquetWriter(fileWriter, new(Tx), c.parallel)
+		if err != nil {
+			return err
+		}
+		writer.RowGroupSize = 128 * 1024 * 1024
+		writer.CompressionType = parquet.CompressionCodec_SNAPPY
+		return nil
+	}
+	if err := nextPartition(); err != nil {
 		return err
 	}
-	defer fileWriter.Close()
-	writerFile := ParquetFile.NewWriterFile(fileWriter)
-	writer, err := ParquetWriter.NewParquetWriter(writerFile, new(Tx), c.parallel)
-	if err != nil {
-		return err
-	}
-	writer.RowGroupSize = 128 * 1024 * 1024
-	writer.CompressionType = parquet.CompressionCodec_SNAPPY
 
 	// create scanner
 	txScanner := &scanner{c.db, c.date, c.endBlock, c.parallel, false}
 	go txScanner.scan(targetTime, txChan, errChan, stopChan, progressChan)
 
 	stop := false
+	var err error
+	var currSize int32
 	for !stop {
 		select {
 		case tx := <-txChan:
+			if currSize >= SIZE_PER_FILE {
+				err = nextPartition()
+				if err != nil {
+					stopChan <- struct{}{}
+					stop = true
+					break
+				}
+				currSize = 0
+			}
+			currSize += tx.Size
 			if err = writer.Write(tx); err != nil {
 				stopChan <- struct{}{}
 				stop = true

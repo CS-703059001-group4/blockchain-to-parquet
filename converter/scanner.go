@@ -81,7 +81,8 @@ func (s *scanner) scanTx(tx *btc.Tx, height uint32, blockDate time.Time) (*Tx, e
 	scannerTx := &Tx{
 		Hash:         tx.Hash.String(),
 		Block:        int32(height),
-		LockTime:     int32(tx.Size),
+		Size:         int32(tx.Size),
+		LockTime:     int32(tx.Lock_time),
 		ReceivedTime: blockDate.Unix(),
 		TotalOutput:  0,
 		Vin:          []TxIn{},

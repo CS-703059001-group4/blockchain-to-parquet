@@ -14,7 +14,7 @@ import (
 var DataDir = flag.String("data", "~/Library/Application Support/Bitcoin/blocks", "")
 var DateFile = flag.String("datefile", "./date.csv", "")
 var EndBlock = flag.Uint("end", 546556, "")
-var OutFile = flag.String("outfile", "./tx.parquet", "")
+var OutFile = flag.String("outfile", "./tx-%d.parquet", "")
 var Date = flag.String("date", "2018-10-20", "")
 
 func main() {
