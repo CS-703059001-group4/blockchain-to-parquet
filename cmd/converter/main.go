@@ -11,15 +11,18 @@ import (
 	homedir "github.com/mitchellh/go-homedir"
 )
 
-var Host = flag.String("host", "localhost:8332", "")
-var User = flag.String("user", "user", "")
-var Pass = flag.String("pass", "123", "")
+var DataDir = flag.String("data", "~/Library/Application Support/Bitcoin/blocks", "")
 var DateFile = flag.String("datefile", "./date.csv", "")
+var EndBlock = flag.Uint("end", 546556, "")
 var OutFile = flag.String("outfile", "./tx.parquet", "")
 var Date = flag.String("date", "2018-10-20", "")
 
 func main() {
 	flag.Parse()
+	dataDir, err := homedir.Expand(*DataDir)
+	if err != nil {
+		log.Fatal(err)
+	}
 	dateFile, err := homedir.Expand(*DateFile)
 	if err != nil {
 		log.Fatal(err)
@@ -33,9 +36,8 @@ func main() {
 		log.Fatal(err)
 	}
 	options := &converter.ConverterOptions{
-		Host:     *Host,
-		User:     *User,
-		Pass:     *Pass,
+		EndBlock: uint32(*EndBlock),
+		DataDir:  dataDir,
 		DateFile: dateFile,
 		Parallel: int64(runtime.NumCPU()),
 	}
@@ -43,17 +45,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	progressChan := make(chan *converter.Tx, 100)
+	progressChan := make(chan float32, 100)
 	defer close(progressChan)
 	go func() {
 		counter := 0
 		for {
-			tx, ok := <-progressChan
+			progress, ok := <-progressChan
 			if !ok {
 				break
 			}
 			counter += 1
-			fmt.Printf("\r%s (block: %d, counter: %d)", time.Unix(tx.ReceivedTime, 0), tx.Block, counter)
+			fmt.Printf("\r%d, %d%%", counter, int(progress*100))
 		}
 	}()
 	if err := txConverter.Convert(date, progressChan, outFile); err != nil {

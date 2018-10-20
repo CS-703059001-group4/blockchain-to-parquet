@@ -42,57 +42,6 @@
   version = "0.11.0"
 
 [[projects]]
-  branch = "master"
-  digest = "1:83160035e81a0d248a1379f71b12e94c26b0cc8dab22994663af7e2e9ff9611b"
-  name = "github.com/btcsuite/btcd"
-  packages = [
-    "btcec",
-    "btcjson",
-    "chaincfg",
-    "chaincfg/chainhash",
-    "rpcclient",
-    "wire",
-  ]
-  pruneopts = ""
-  revision = "67e573d211ace594f1366b4ce9d39726c4b19bd0"
-
-[[projects]]
-  branch = "master"
-  digest = "1:30d4a548e09bca4a0c77317c58e7407e2a65c15325e944f9c08a7b7992f8a59e"
-  name = "github.com/btcsuite/btclog"
-  packages = ["."]
-  pruneopts = ""
-  revision = "84c8d2346e9fc8c7b947e243b9c24e6df9fd206a"
-
-[[projects]]
-  branch = "master"
-  digest = "1:56b87c786a316d6e9b9c7ba8f3dd64e3199ca3b33a55cc596c633023bed20264"
-  name = "github.com/btcsuite/btcutil"
-  packages = [
-    ".",
-    "base58",
-    "bech32",
-  ]
-  pruneopts = ""
-  revision = "ab6388e0c60ae4834a1f57511e20c17b5f78be4b"
-
-[[projects]]
-  branch = "master"
-  digest = "1:422f38d57f1bc0fdc34f26d0f1026869a3710400b09b5478c9288efa13573cfa"
-  name = "github.com/btcsuite/go-socks"
-  packages = ["socks"]
-  pruneopts = ""
-  revision = "4720035b7bfd2a9bb130b1c184f8bbe41b6f0d0f"
-
-[[projects]]
-  branch = "master"
-  digest = "1:dfc248d5e6e1582fdec83796d3d1d451aa6cae773c4e4ba1dac2838caef6d381"
-  name = "github.com/btcsuite/websocket"
-  packages = ["."]
-  pruneopts = ""
-  revision = "31079b6807923eb23992c421b114992b95131b55"
-
-[[projects]]
   digest = "1:d867986784d0c4d2960f68840180ffa54cb01ef254d8c6bc9496117ed1b5d73b"
   name = "github.com/colinmarc/hdfs"
   packages = [
@@ -143,6 +92,19 @@
   pruneopts = ""
   revision = "ae18d6b8b3205b561c79e8e5f69bff09736185f4"
   version = "v1.0.0"
+
+[[projects]]
+  digest = "1:d29c2c67a77ce94b91d68c4c4c6796ccd27c0ebc6547931530899f6881a53d0b"
+  name = "github.com/piotrnar/gocoin"
+  packages = [
+    "lib/btc",
+    "lib/others/bech32",
+    "lib/others/blockdb",
+    "lib/secp256k1",
+  ]
+  pruneopts = ""
+  revision = "6aca6f39ecc78054b56b570b77a947be6b4a91c9"
+  version = "1.9.4"
 
 [[projects]]
   digest = "1:d0431c2fd72e39ee43ea7742322abbc200c3e704c9102c5c3c2e2e667095b0ca"
@@ -359,9 +321,9 @@
   analyzer-version = 1
   input-imports = [
     "github.com/PuerkitoBio/goquery",
-    "github.com/btcsuite/btcd/chaincfg/chainhash",
-    "github.com/btcsuite/btcd/rpcclient",
     "github.com/mitchellh/go-homedir",
+    "github.com/piotrnar/gocoin/lib/btc",
+    "github.com/piotrnar/gocoin/lib/others/blockdb",
     "github.com/xitongsys/parquet-go/ParquetFile",
     "github.com/xitongsys/parquet-go/ParquetWriter",
     "github.com/xitongsys/parquet-go/parquet",

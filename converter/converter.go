@@ -3,51 +3,44 @@ package converter
 import (
 	"time"
 
-	"github.com/btcsuite/btcd/rpcclient"
+	"github.com/piotrnar/gocoin/lib/others/blockdb"
+
 	"github.com/xitongsys/parquet-go/ParquetFile"
 	"github.com/xitongsys/parquet-go/ParquetWriter"
 	"github.com/xitongsys/parquet-go/parquet"
 )
 
 type Converter struct {
-	rpc      *rpcclient.Client
+	db       *blockdb.BlockDB
 	date     *blockDate
+	endBlock uint32
 	parallel int64
 }
 
 type ConverterOptions struct {
-	Host     string
-	User     string
-	Pass     string
+	EndBlock uint32
+	DataDir  string
 	DateFile string
 	Parallel int64
 }
 
 func New(options *ConverterOptions) (*Converter, error) {
-	connCfg := &rpcclient.ConnConfig{
-		Host:         options.Host,
-		User:         options.User,
-		Pass:         options.Pass,
-		HTTPPostMode: true,
-		DisableTLS:   true,
-	}
-	client, err := rpcclient.New(connCfg, nil)
-	if err != nil {
-		return nil, err
-	}
+	magic := [4]byte{0xF9, 0xBE, 0xB4, 0xD9}
+	db := blockdb.NewBlockDB(options.DataDir, magic)
 	date := newBlockDate()
-	err = date.build(options.DateFile)
+	err := date.build(options.DateFile)
 	if err != nil {
 		return nil, err
 	}
 	return &Converter{
-		client,
+		db,
 		date,
+		options.EndBlock,
 		options.Parallel,
 	}, nil
 }
 
-func (c *Converter) Convert(targetTime time.Time, progress chan<- *Tx, outFile string) error {
+func (c *Converter) Convert(targetTime time.Time, progressChan chan<- float32, outFile string) error {
 	// init chan
 	txChan := make(chan *Tx, 100)
 	defer close(txChan)
@@ -71,20 +64,20 @@ func (c *Converter) Convert(targetTime time.Time, progress chan<- *Tx, outFile s
 	writer.CompressionType = parquet.CompressionCodec_SNAPPY
 
 	// create scanner
-	txScanner := &scanner{c.rpc, c.date, c.parallel}
-	go txScanner.scan(targetTime, txChan, errChan, stopChan)
+	txScanner := &scanner{c.db, c.date, c.endBlock, c.parallel, false}
+	go txScanner.scan(targetTime, txChan, errChan, stopChan, progressChan)
 
 	stop := false
 	for !stop {
 		select {
 		case tx := <-txChan:
-			progress <- tx
 			if err = writer.Write(tx); err != nil {
 				stopChan <- struct{}{}
 				stop = true
 			}
 			break
 		case err = <-errChan:
+			stop = true
 			break
 		}
 	}

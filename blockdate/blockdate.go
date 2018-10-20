@@ -13,8 +13,8 @@ func Fetch(writer io.Writer) error {
 		if err != nil {
 			return err
 		}
-		for height, blockTime := range page.Blocks {
-			writer.Write([]byte(fmt.Sprintf("%d,%d\n", height, blockTime.Unix())))
+		for height, meta := range page.Blocks {
+			writer.Write([]byte(fmt.Sprintf("%d,%s,%d\n", height, meta.Hash, meta.ReceivedTime.Unix())))
 		}
 		page = page.PrevPage()
 	}

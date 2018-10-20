@@ -1,2 +1,2 @@
-tx.parquet
+*.parquet
 vendor

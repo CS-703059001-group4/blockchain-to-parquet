@@ -13,20 +13,25 @@ import (
 
 const BTC_COM_HOME_PAGE = "https://www.blockchain.com/btc/blocks"
 
+type BlockMeta struct {
+	ReceivedTime time.Time
+	Hash         string
+}
+
 type BtcCom struct{}
 
 func (b *BtcCom) LastPage() *BtcComPage {
 	return &BtcComPage{
 		BTC_COM_HOME_PAGE,
 		"",
-		map[int64]time.Time{},
+		map[int64]BlockMeta{},
 	}
 }
 
 type BtcComPage struct {
 	pageUrl     string
 	prevPageUrl string
-	Blocks      map[int64]time.Time
+	Blocks      map[int64]BlockMeta
 }
 
 func (p *BtcComPage) PrevPage() *BtcComPage {
@@ -36,7 +41,7 @@ func (p *BtcComPage) PrevPage() *BtcComPage {
 	return &BtcComPage{
 		p.prevPageUrl,
 		"",
-		map[int64]time.Time{},
+		map[int64]BlockMeta{},
 	}
 }
 
@@ -70,7 +75,8 @@ func (p *BtcComPage) Fetch() error {
 		heightStr := re.ReplaceAllString(strings.Replace(strings.TrimSpace(s.Find("td").Eq(0).Text()), ",", "", -1), "")
 		height, _ := strconv.ParseInt(heightStr, 10, 64)
 		timestamp, _ := time.Parse("2006-01-02 15:04:05", s.Find("td").Eq(1).Text())
-		p.Blocks[height] = timestamp
+		hash := s.Find("td").Eq(2).Text()
+		p.Blocks[height] = BlockMeta{timestamp, hash}
 	})
 
 	prevPageUrl, _ := doc.Find("body > div > h2 > a:nth-child(1)").Attr("href")

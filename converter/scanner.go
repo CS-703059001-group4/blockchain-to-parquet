@@ -1,16 +1,19 @@
 package converter
 
 import (
+	"encoding/hex"
 	"time"
 
-	"github.com/btcsuite/btcd/rpcclient"
-	"github.com/btcsuite/btcd/wire"
+	"github.com/piotrnar/gocoin/lib/btc"
+	"github.com/piotrnar/gocoin/lib/others/blockdb"
 )
 
 type scanner struct {
-	rpc      *rpcclient.Client
+	db       *blockdb.BlockDB
 	date     *blockDate
+	endBlock uint32
 	parallel int64
+	stopped  bool
 }
 
 func loadDate(p *scanner, dateFile string) error {
@@ -18,81 +21,91 @@ func loadDate(p *scanner, dateFile string) error {
 	return p.date.build(dateFile)
 }
 
-func (s *scanner) scan(targetDate time.Time, txChan chan<- *Tx, errChan chan<- error, stopChan <-chan struct{}) {
-	count, err := s.rpc.GetBlockCount()
-	if err != nil {
-		errChan <- err
-		return
-	}
-	stopped := false
+func (s *scanner) scan(targetDate time.Time, txChan chan<- *Tx, errChan chan<- error, stopChan <-chan struct{}, progressChan chan<- float32) {
 	go func() {
 		_, _ = <-stopChan
-		stopped = true
+		s.stopped = true
 	}()
-	concurrent := make(chan int, s.parallel)
-	defer close(concurrent)
-	for height := count; !stopped && height >= 0; height -= 1 {
-		blockDate, ok := s.date.getDate(uint32(height))
-		if !ok {
-			continue
-		}
-		if blockDate.Before(targetDate) {
-			continue
-		}
-		hash, err := s.rpc.GetBlockHash(height)
+
+	var height uint32
+	var blockCounter uint32
+	for height = 0; !s.stopped && height <= s.endBlock; height += 1 {
+		err := s.scanBlock(txChan, targetDate)
 		if err != nil {
 			errChan <- err
-			return
+			s.stopped = true
 		}
-		block, err := s.rpc.GetBlock(hash)
-		if err != nil {
-			errChan <- err
-			return
-		}
-		for _, msgTx := range block.Transactions {
-			concurrent <- 0
-			go func() {
-				scannerTx, err := s.scanTx(msgTx, height, blockDate)
-				defer func() { <-concurrent }()
-				if err != nil {
-					errChan <- err
-				}
-				if !stopped {
-					txChan <- scannerTx
-				}
-			}()
-		}
+		blockCounter += 1
+		progressChan <- float32(blockCounter) / float32(s.endBlock-1)
 	}
 	errChan <- nil
 }
 
-func (s *scanner) scanTx(msgTx *wire.MsgTx, height int64, blockDate time.Time) (*Tx, error) {
-	txHash := msgTx.TxHash()
-	tx, err := s.rpc.GetRawTransactionVerbose(&txHash)
+func (s *scanner) scanBlock(txChan chan<- *Tx, targetDate time.Time) error {
+	dat, err := s.db.FetchNextBlock()
 	if err != nil {
-		return nil, err
+		return err
 	}
+	block, err := btc.NewBlock(dat[:])
+	if err != nil {
+		return err
+	}
+	height, ok := s.date.getHeight(block.Hash.String())
+	if !ok {
+		return nil
+	}
+	blockDate, ok := s.date.getDate(height)
+	if !ok {
+		return nil
+	}
+	if blockDate.Before(targetDate) {
+		return nil
+	}
+	err = block.BuildTxList()
+	if err != nil {
+		return err
+	}
+	for _, tx := range block.Txs {
+		scannerTx, err := s.scanTx(tx, block.Height, blockDate)
+		if err != nil {
+			return err
+		}
+		if !s.stopped {
+			txChan <- scannerTx
+		}
+	}
+	return nil
+}
+
+func (s *scanner) scanTx(tx *btc.Tx, height uint32, blockDate time.Time) (*Tx, error) {
 	scannerTx := &Tx{
-		Hash:         txHash.String(),
-		Block:        height,
-		LockTime:     tx.Size,
+		Hash:         tx.Hash.String(),
+		Block:        int32(height),
+		LockTime:     int32(tx.Size),
 		ReceivedTime: blockDate.Unix(),
 		TotalOutput:  0,
 		Vin:          []TxIn{},
 		Vout:         []TxOut{},
 	}
-	for _, txIn := range msgTx.TxIn {
-		scannerTx.Vin = append(scannerTx.Vin, TxIn{
-			PrevHash: (&txIn.PreviousOutPoint.Hash).String(),
-			Index:    int32(txIn.PreviousOutPoint.Index),
-		})
+	for _, txIn := range tx.TxIn {
+		if !txIn.Input.IsNull() {
+			scannerTx.Vin = append(scannerTx.Vin, TxIn{
+				PrevHash: hex.EncodeToString(txIn.Input.Hash[:]),
+				Index:    int32(txIn.Input.Vout),
+			})
+		}
 	}
-	for _, txOut := range tx.Vout {
-		scannerTx.TotalOutput += txOut.Value
+	for _, txOut := range tx.TxOut {
+		value := float64(txOut.Value) / 1e8
+		scannerTx.TotalOutput += value
+		btcAddr := btc.NewAddrFromPkScript(txOut.Pk_script, false)
+		addr := ""
+		if btcAddr != nil {
+			addr = btcAddr.String()
+		}
 		scannerTx.Vout = append(scannerTx.Vout, TxOut{
-			Addresses: txOut.ScriptPubKey.Addresses[:],
-			Value:     txOut.Value,
-			Type:      txOut.ScriptPubKey.Type,
+			Address: addr,
+			Value:   value,
 		})
 	}
 	return scannerTx, nil
