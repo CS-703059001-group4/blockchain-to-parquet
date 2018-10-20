@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"runtime"
 	"time"
 
 	"github.com/CS-703059001-group4/blockchain-to-parquet/converter"
@@ -36,12 +37,13 @@ func main() {
 		User:     *User,
 		Pass:     *Pass,
 		DateFile: dateFile,
+		Parallel: int64(runtime.NumCPU() * 2),
 	}
 	txConverter, err := converter.New(options)
 	if err != nil {
 		log.Fatal(err)
 	}
-	progressChan := make(chan converter.Tx, 10)
+	progressChan := make(chan *converter.Tx, 100)
 	defer close(progressChan)
 	go func() {
 		counter := 0

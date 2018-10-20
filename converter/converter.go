@@ -48,9 +48,9 @@ func New(options *ConverterOptions) (*Converter, error) {
 	}, nil
 }
 
-func (c *Converter) Convert(targetTime time.Time, progress chan<- Tx, outFile string) error {
+func (c *Converter) Convert(targetTime time.Time, progress chan<- *Tx, outFile string) error {
 	// init chan
-	txChan := make(chan Tx, 100)
+	txChan := make(chan *Tx, 100)
 	defer close(txChan)
 	errChan := make(chan error)
 	defer close(errChan)
@@ -72,7 +72,7 @@ func (c *Converter) Convert(targetTime time.Time, progress chan<- Tx, outFile st
 	writer.CompressionType = parquet.CompressionCodec_SNAPPY
 
 	// create scanner
-	txScanner := &scanner{c.rpc, c.date}
+	txScanner := &scanner{c.rpc, c.date, c.parallel}
 	go txScanner.scan(targetTime, txChan, errChan, stopChan)
 
 	stop := false
