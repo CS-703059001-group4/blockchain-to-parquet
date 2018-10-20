@@ -1,0 +1,15 @@
+[[constraint]]
+  name = "github.com/PuerkitoBio/goquery"
+  version = "1.4.1"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/btcsuite/btcd"
+
+[[constraint]]
+  name = "github.com/mitchellh/go-homedir"
+  version = "1.0.0"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/xitongsys/parquet-go"
