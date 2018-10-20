@@ -1,7 +1,6 @@
 package converter
 
 import (
-	"runtime"
 	"time"
 
 	"github.com/btcsuite/btcd/rpcclient"
@@ -44,7 +43,7 @@ func New(options *ConverterOptions) (*Converter, error) {
 	return &Converter{
 		client,
 		date,
-		int64(runtime.NumCPU()),
+		options.Parallel,
 	}, nil
 }
 

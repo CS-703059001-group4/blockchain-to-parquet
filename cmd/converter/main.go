@@ -37,7 +37,7 @@ func main() {
 		User:     *User,
 		Pass:     *Pass,
 		DateFile: dateFile,
-		Parallel: int64(runtime.NumCPU() * 2),
+		Parallel: int64(runtime.NumCPU()),
 	}
 	txConverter, err := converter.New(options)
 	if err != nil {
