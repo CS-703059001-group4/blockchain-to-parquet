@@ -1,122 +1,84 @@
 package converter
 
 import (
-	"fmt"
-	"time"
+	"path"
 
-	"github.com/piotrnar/gocoin/lib/others/blockdb"
-
-	"github.com/xitongsys/parquet-go/ParquetFile"
-	"github.com/xitongsys/parquet-go/ParquetWriter"
-	"github.com/xitongsys/parquet-go/parquet"
+	"github.com/CS-703059001-group4/blockchain-to-parquet/chain"
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcutil"
 )
 
-const SIZE_PER_FILE = 128000000
-
-type Converter struct {
-	db       *blockdb.BlockDB
-	date     *blockDate
-	endBlock uint32
-	parallel int64
+type ConverterOptions struct {
+	OutputDir string
+	DataDir   string
+	DateFile  string
 }
 
-type ConverterOptions struct {
-	EndBlock uint32
-	DataDir  string
-	DateFile string
-	Parallel int64
+type Converter struct {
+	options *ConverterOptions
+	date    *blockDate
 }
 
 func New(options *ConverterOptions) (*Converter, error) {
-	magic := [4]byte{0xF9, 0xBE, 0xB4, 0xD9}
-	db := blockdb.NewBlockDB(options.DataDir, magic)
 	date := newBlockDate()
-	err := date.build(options.DateFile)
-	if err != nil {
+	if err := date.build(options.DateFile); err != nil {
 		return nil, err
 	}
-	return &Converter{
-		db,
-		date,
-		options.EndBlock,
-		options.Parallel,
-	}, nil
+	return &Converter{options, date}, nil
 }
 
-func (c *Converter) Convert(targetTime time.Time, progressChan chan<- float32, outFile string) error {
-	// init chan
-	txChan := make(chan *Tx, 100)
-	defer close(txChan)
-	errChan := make(chan error)
-	defer close(errChan)
-	stopChan := make(chan struct{})
-	defer close(stopChan)
-
-	// create parquet writer
-	partition := 0
-	var fileWriter ParquetFile.ParquetFile
-	var writer *ParquetWriter.ParquetWriter
-	nextPartition := func() error {
-		if fileWriter != nil {
-			err := writer.WriteStop()
-			fileWriter.Close()
-			if err != nil {
-				return err
+func (c *Converter) Convert(progress chan<- string, parallel int64) error {
+	files := newOutputFiles(path.Join(c.options.OutputDir, "/%d.parquet"), parallel)
+	return chain.IterateTx(&chain.IterateTxOptions{
+		FolderPath: c.options.DataDir,
+		BufSize:    int(parallel),
+		Parallel:   int(parallel),
+		Handler: func(n int, rawTx *chain.Tx) error {
+			hash := rawTx.Hash().String()
+			defer func() {
+				progress <- hash
+			}()
+			msgTx := rawTx.MsgTx()
+			height, ok := c.date.getHeight(rawTx.Block)
+			if !ok {
+				return nil
 			}
-		}
-		var err error
-		fileWriter, err = ParquetFile.NewLocalFileWriter(fmt.Sprintf(outFile, partition))
-		if err != nil {
-			return err
-		}
-		partition += 1
-		writer, err = ParquetWriter.NewParquetWriter(fileWriter, new(Tx), c.parallel)
-		if err != nil {
-			return err
-		}
-		writer.RowGroupSize = 128 * 1024 * 1024
-		writer.CompressionType = parquet.CompressionCodec_SNAPPY
-		return nil
-	}
-	if err := nextPartition(); err != nil {
-		return err
-	}
-
-	// create scanner
-	txScanner := &scanner{c.db, c.date, c.endBlock, c.parallel, false}
-	go txScanner.scan(targetTime, txChan, errChan, stopChan, progressChan)
-
-	stop := false
-	var err error
-	var currSize int32
-	for !stop {
-		select {
-		case tx := <-txChan:
-			if currSize >= SIZE_PER_FILE {
-				err = nextPartition()
-				if err != nil {
-					stopChan <- struct{}{}
-					stop = true
-					break
+			date, ok := c.date.getDate(height)
+			if !ok {
+				return nil
+			}
+			tx := &Tx{
+				Hash:         hash,
+				LockTime:     int32(msgTx.LockTime),
+				Size:         int32(msgTx.SerializeSize()),
+				ReceivedTime: date.Unix(),
+				Block:        int32(height),
+				TotalOutput:  0,
+				Vin:          make([]TxIn, len(msgTx.TxIn)),
+				Vout:         make([]TxOut, len(msgTx.TxOut)),
+			}
+			for i, txIn := range msgTx.TxIn {
+				tx.Vin[i] = TxIn{
+					PrevHash: txIn.PreviousOutPoint.Hash.String(),
+					Index:    int32(txIn.PreviousOutPoint.Index),
 				}
-				currSize = 0
 			}
-			currSize += tx.Size
-			if err = writer.Write(tx); err != nil {
-				stopChan <- struct{}{}
-				stop = true
+			for i, txOut := range msgTx.TxOut {
+				scriptClass, addrs, _, _ := txscript.ExtractPkScriptAddrs(txOut.PkScript, &chaincfg.MainNetParams)
+				encodedAddrs := make([]string, len(addrs))
+				for j, addr := range addrs {
+					encodedAddrs[j] = addr.EncodeAddress()
+				}
+				val := btcutil.Amount(txOut.Value).ToBTC()
+				tx.TotalOutput += val
+				tx.Vout[i] = TxOut{
+					Addresses: encodedAddrs,
+					Value:     val,
+					Type:      scriptClass.String(),
+				}
 			}
-			break
-		case err = <-errChan:
-			stop = true
-			break
-		}
-	}
-
-	if err != nil {
-		writer.WriteStop()
-		return err
-	}
-
-	return writer.WriteStop()
+			return files.write(tx)
+		},
+	})
 }

@@ -4,18 +4,16 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"runtime"
-	"time"
 
 	"github.com/CS-703059001-group4/blockchain-to-parquet/converter"
 	homedir "github.com/mitchellh/go-homedir"
 )
 
-var DataDir = flag.String("data", "~/Library/Application Support/Bitcoin/blocks", "")
+var DataDir = flag.String("data", "./data", "")
 var DateFile = flag.String("datefile", "./date.csv", "")
-var EndBlock = flag.Uint("end", 546556, "")
-var OutFile = flag.String("outfile", "./tx-%d.parquet", "")
-var Date = flag.String("date", "2018-10-20", "")
+var OutDir = flag.String("out", "./out", "")
 
 func main() {
 	flag.Parse()
@@ -27,38 +25,33 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	outFile, err := homedir.Expand(*OutFile)
+	outDir, err := homedir.Expand(*OutDir)
 	if err != nil {
 		log.Fatal(err)
 	}
-	date, err := time.Parse("2006-01-02", *Date)
-	if err != nil {
+
+	if err := os.MkdirAll(outDir, os.ModePerm); err != nil {
 		log.Fatal(err)
 	}
+
 	options := &converter.ConverterOptions{
-		EndBlock: uint32(*EndBlock),
-		DataDir:  dataDir,
-		DateFile: dateFile,
-		Parallel: int64(runtime.NumCPU()),
+		DataDir:   dataDir,
+		DateFile:  dateFile,
+		OutputDir: outDir,
 	}
 	txConverter, err := converter.New(options)
 	if err != nil {
 		log.Fatal(err)
 	}
-	progressChan := make(chan float32, 100)
-	defer close(progressChan)
+
+	progress := make(chan string, 100)
+	defer close(progress)
 	go func() {
-		counter := 0
-		for {
-			progress, ok := <-progressChan
-			if !ok {
-				break
-			}
-			counter += 1
-			fmt.Printf("\r%d, %d%%", counter, int(progress*100))
+		for txHash := range progress {
+			fmt.Printf("\r%s", txHash)
 		}
 	}()
-	if err := txConverter.Convert(date, progressChan, outFile); err != nil {
+	if err := txConverter.Convert(progress, int64(runtime.NumCPU())); err != nil {
 		log.Fatal(err)
 	}
 }
