@@ -78,22 +78,24 @@ func (c *Converter) Convert(progress chan<- string, parallel int64) error {
 				var indexerTxOut *indexer.TxOut
 				txInHash := txIn.PreviousOutPoint.Hash.String()
 				txData, err := c.db.Get([]byte(fmt.Sprintf("txout-%s_%d", txInHash, txIn.PreviousOutPoint.Index)), nil)
+				vin := TxIn{
+					PrevHash: txInHash,
+					Index:    int32(txIn.PreviousOutPoint.Index),
+					TxOut:    nil,
+				}
 				if err == nil {
 					indexerTxOut = &indexer.TxOut{}
 					if err := json.Unmarshal(txData, indexerTxOut); err != nil {
 						return err
 					}
 					tx.TotalInput += indexerTxOut.Value
-				}
-				tx.Vin[i] = TxIn{
-					PrevHash: txInHash,
-					Index:    int32(txIn.PreviousOutPoint.Index),
-					TxOut: &TxOut{
+					vin.TxOut = &TxOut{
 						Addresses: indexerTxOut.Addresses,
 						Value:     indexerTxOut.Value,
 						Type:      indexerTxOut.Type,
-					},
+					}
 				}
+				tx.Vin[i] = vin
 			}
 			for i, txOut := range msgTx.TxOut {
 				scriptClass, addrs, _, _ := txscript.ExtractPkScriptAddrs(txOut.PkScript, &chaincfg.MainNetParams)

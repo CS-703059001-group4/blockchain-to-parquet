@@ -14,6 +14,7 @@ import (
 var DataDir = flag.String("data", "./data", "")
 var DateFile = flag.String("datefile", "./date.csv", "")
 var OutDir = flag.String("out", "./out", "")
+var DBPath = flag.String("db", "./db", "")
 
 func main() {
 	flag.Parse()
@@ -29,6 +30,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	dbPath, err := homedir.Expand(*DBPath)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	if err := os.MkdirAll(outDir, os.ModePerm); err != nil {
 		log.Fatal(err)
@@ -38,6 +43,7 @@ func main() {
 		DataDir:   dataDir,
 		DateFile:  dateFile,
 		OutputDir: outDir,
+		DBPath:    dbPath,
 	}
 	txConverter, err := converter.New(options)
 	if err != nil {
