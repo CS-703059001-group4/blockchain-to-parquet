@@ -9,6 +9,11 @@
 [[constraint]]
   branch = "master"
   name = "github.com/xitongsys/parquet-go"
+
 [[constraint]]
-  name = "github.com/piotrnar/gocoin"
-  version = "1.9.4"
+  branch = "master"
+  name = "github.com/btcsuite/btcd"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/btcsuite/btcutil"
