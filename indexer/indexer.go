@@ -76,7 +76,7 @@ func (i *Indexer) Index(progress chan<- string, parallel int64) error {
 				if err != nil {
 					return err
 				}
-				batch.Put([]byte(fmt.Sprintf("%s_%d", hash, i)), val)
+				batch.Put([]byte(fmt.Sprintf("txout-%s_%d", hash, i)), val)
 			}
 			return i.db.Write(batch, nil)
 		},
