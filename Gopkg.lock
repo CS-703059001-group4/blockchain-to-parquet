@@ -140,6 +140,27 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:d0b9a2633ea6359a07552f501bc026b917686d099eec9a3d46f28eb9094481fb"
+  name = "github.com/syndtr/goleveldb"
+  packages = [
+    "leveldb",
+    "leveldb/cache",
+    "leveldb/comparer",
+    "leveldb/errors",
+    "leveldb/filter",
+    "leveldb/iterator",
+    "leveldb/journal",
+    "leveldb/memdb",
+    "leveldb/opt",
+    "leveldb/storage",
+    "leveldb/table",
+    "leveldb/util",
+  ]
+  pruneopts = ""
+  revision = "6b91fda63f2e36186f1c9d0e48578defb69c5d43"
+
+[[projects]]
+  branch = "master"
   digest = "1:7d04aeea095900a90a4398d44242c806aaf4a4e5600f7d29fed5e2bea228b2d6"
   name = "github.com/xitongsys/parquet-go"
   packages = [
@@ -346,6 +367,7 @@
     "github.com/btcsuite/btcd/txscript",
     "github.com/btcsuite/btcutil",
     "github.com/mitchellh/go-homedir",
+    "github.com/syndtr/goleveldb/leveldb",
     "github.com/xitongsys/parquet-go/ParquetFile",
     "github.com/xitongsys/parquet-go/ParquetWriter",
   ]
