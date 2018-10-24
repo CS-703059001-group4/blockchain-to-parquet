@@ -59,6 +59,12 @@ func newOutputFiles(fileNameFormat string, parallel int64) *outputFiles {
 	}
 }
 
+func (ofs *outputFiles) close() error {
+	ofs.lock.Lock()
+	defer ofs.lock.Unlock()
+	return ofs.currentFile.close()
+}
+
 func (ofs *outputFiles) write(tx *Tx) error {
 	ofs.lock.Lock()
 	defer ofs.lock.Unlock()

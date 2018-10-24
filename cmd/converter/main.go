@@ -43,6 +43,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer txConverter.Destroy()
 
 	progress := make(chan string, 100)
 	defer close(progress)
