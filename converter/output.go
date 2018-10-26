@@ -39,9 +39,9 @@ func (of *outputFile) close() error {
 
 type outputFiles struct {
 	fileNameFormat string
-	sizePerFile    int32
+	sizePerFile    int64
 	currentFile    *outputFile
-	currentSize    int32
+	currentSize    int64
 	index          int
 	lock           sync.Mutex
 	parallel       int64
@@ -50,7 +50,7 @@ type outputFiles struct {
 func newOutputFiles(fileNameFormat string, parallel int64) *outputFiles {
 	return &outputFiles{
 		fileNameFormat,
-		128000000,
+		536870912,
 		nil,
 		0,
 		0,
@@ -72,7 +72,7 @@ func (ofs *outputFiles) write(tx *Tx) error {
 	if err != nil {
 		return err
 	}
-	ofs.currentSize += tx.Size
+	ofs.currentSize += int64(tx.Size)
 	return file.write(tx)
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 
+	"github.com/CS-703059001-group4/blockchain-to-parquet/blockdate"
 	"github.com/CS-703059001-group4/blockchain-to-parquet/chain"
 	"github.com/CS-703059001-group4/blockchain-to-parquet/indexer"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -22,13 +23,13 @@ type ConverterOptions struct {
 
 type Converter struct {
 	options *ConverterOptions
-	date    *blockDate
+	date    *blockdate.BlockDate
 	db      *leveldb.DB
 }
 
 func New(options *ConverterOptions) (*Converter, error) {
-	date := newBlockDate()
-	if err := date.build(options.DateFile); err != nil {
+	date := blockdate.New()
+	if err := date.Build(options.DateFile); err != nil {
 		return nil, err
 	}
 	db, err := leveldb.OpenFile(options.DBPath, nil)
@@ -55,11 +56,11 @@ func (c *Converter) Convert(progress chan<- string, parallel int64) error {
 				progress <- hash
 			}()
 			msgTx := rawTx.MsgTx()
-			height, ok := c.date.getHeight(rawTx.Block)
+			height, ok := c.date.GetHeight(rawTx.Block)
 			if !ok {
 				return nil
 			}
-			date, ok := c.date.getDate(height)
+			date, ok := c.date.GetDate(height)
 			if !ok {
 				return nil
 			}
