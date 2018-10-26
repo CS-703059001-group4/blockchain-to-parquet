@@ -14,6 +14,7 @@ import (
 type TxOut struct {
 	Addresses []string
 	Value     float64
+	Type      string
 }
 
 type IndexerOptions struct {
@@ -64,7 +65,7 @@ func (i *Indexer) Index(progress chan<- string, parallel int64) error {
 			msgTx := tx.MsgTx()
 			batch := new(leveldb.Batch)
 			for i, txOut := range msgTx.TxOut {
-				_, addrs, _, _ := txscript.ExtractPkScriptAddrs(txOut.PkScript, &chaincfg.MainNetParams)
+				scriptClass, addrs, _, _ := txscript.ExtractPkScriptAddrs(txOut.PkScript, &chaincfg.MainNetParams)
 				encodedAddrs := make([]string, len(addrs))
 				for j, addr := range addrs {
 					encodedAddrs[j] = addr.EncodeAddress()
@@ -72,6 +73,7 @@ func (i *Indexer) Index(progress chan<- string, parallel int64) error {
 				val, err := json.Marshal(&TxOut{
 					encodedAddrs,
 					btcutil.Amount(txOut.Value).ToBTC(),
+					scriptClass.String(),
 				})
 				if err != nil {
 					return err

@@ -1,35 +1,51 @@
 package converter
 
 import (
+	"encoding/json"
+	"fmt"
 	"path"
 
+	"github.com/CS-703059001-group4/blockchain-to-parquet/blockdate"
 	"github.com/CS-703059001-group4/blockchain-to-parquet/chain"
+	"github.com/CS-703059001-group4/blockchain-to-parquet/indexer"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcutil"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type ConverterOptions struct {
 	OutputDir string
 	DataDir   string
 	DateFile  string
+	DBPath    string
 }
 
 type Converter struct {
 	options *ConverterOptions
-	date    *blockDate
+	date    *blockdate.BlockDate
+	db      *leveldb.DB
 }
 
 func New(options *ConverterOptions) (*Converter, error) {
-	date := newBlockDate()
-	if err := date.build(options.DateFile); err != nil {
+	date := blockdate.New()
+	if err := date.Build(options.DateFile); err != nil {
 		return nil, err
 	}
-	return &Converter{options, date}, nil
+	db, err := leveldb.OpenFile(options.DBPath, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &Converter{options, date, db}, nil
+}
+
+func (c *Converter) Destroy() error {
+	return c.db.Close()
 }
 
 func (c *Converter) Convert(progress chan<- string, parallel int64) error {
 	files := newOutputFiles(path.Join(c.options.OutputDir, "/%d.parquet"), parallel)
+	defer files.close()
 	return chain.IterateTx(&chain.IterateTxOptions{
 		FolderPath: c.options.DataDir,
 		BufSize:    int(parallel),
@@ -40,11 +56,11 @@ func (c *Converter) Convert(progress chan<- string, parallel int64) error {
 				progress <- hash
 			}()
 			msgTx := rawTx.MsgTx()
-			height, ok := c.date.getHeight(rawTx.Block)
+			height, ok := c.date.GetHeight(rawTx.Block)
 			if !ok {
 				return nil
 			}
-			date, ok := c.date.getDate(height)
+			date, ok := c.date.GetDate(height)
 			if !ok {
 				return nil
 			}
@@ -54,15 +70,33 @@ func (c *Converter) Convert(progress chan<- string, parallel int64) error {
 				Size:         int32(msgTx.SerializeSize()),
 				ReceivedTime: date.Unix(),
 				Block:        int32(height),
+				TotalInput:   0,
 				TotalOutput:  0,
 				Vin:          make([]TxIn, len(msgTx.TxIn)),
 				Vout:         make([]TxOut, len(msgTx.TxOut)),
 			}
 			for i, txIn := range msgTx.TxIn {
-				tx.Vin[i] = TxIn{
-					PrevHash: txIn.PreviousOutPoint.Hash.String(),
+				var indexerTxOut *indexer.TxOut
+				txInHash := txIn.PreviousOutPoint.Hash.String()
+				txData, err := c.db.Get([]byte(fmt.Sprintf("txout-%s_%d", txInHash, txIn.PreviousOutPoint.Index)), nil)
+				vin := TxIn{
+					PrevHash: txInHash,
 					Index:    int32(txIn.PreviousOutPoint.Index),
+					TxOut:    nil,
 				}
+				if err == nil {
+					indexerTxOut = &indexer.TxOut{}
+					if err := json.Unmarshal(txData, indexerTxOut); err != nil {
+						return err
+					}
+					tx.TotalInput += indexerTxOut.Value
+					vin.TxOut = &TxOut{
+						Addresses: indexerTxOut.Addresses,
+						Value:     indexerTxOut.Value,
+						Type:      indexerTxOut.Type,
+					}
+				}
+				tx.Vin[i] = vin
 			}
 			for i, txOut := range msgTx.TxOut {
 				scriptClass, addrs, _, _ := txscript.ExtractPkScriptAddrs(txOut.PkScript, &chaincfg.MainNetParams)
